@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  SAM Lambda@Edge Translator
+
+Globals:
+  Function:
+    Runtime: python3.7
+    AutoPublishAlias: Edge
+
+Parameters:
+  LogLevel:
+    Type: String
+    AllowedValues: [DEBUG, INFO, WARNING, ERROR, EXCEPTION]
+    Default: INFO
+
+Resources:
+
+  #
+  # S3 bucket
+  #
+  OriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'stack=${AWS::StackName} region=${AWS::Region}'
+
+  S3OriginBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  S3OriginBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: S3OriginBucket
+    Properties:
+      Bucket: !Ref S3OriginBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Id: CloudFrontAccessPolicy
+        Statement:
+          - Sid: "1"
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${OriginAccessIdentity}"
+            Action: s3:GetObject
+            Resource: !Sub "${S3OriginBucket.Arn}/*"
+
+  #
+  # CloudFront distribution
+  #
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn:
+      - S3OriginBucketPolicy
+    Properties:
+      DistributionConfig:
+        Comment: !Sub 'stack=${AWS::StackName} region=${AWS::Region}'
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: "true"
+        # Don't use "PriceClass_All" so stack update is faster
+        PriceClass: PriceClass_100
+        DefaultCacheBehavior:
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          ForwardedValues:
+            QueryString: "false"
+          ViewerProtocolPolicy: redirect-to-https
+          TargetOriginId: S3
+          LambdaFunctionAssociations:
+            - EventType: origin-response
+              LambdaFunctionARN: !Ref OriginResponseFunction.Version
+        Origins:
+          - Id: S3
+            DomainName: !GetAtt S3OriginBucket.DomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${OriginAccessIdentity}"
+
+  #
+  # Parameters
+  #
+  BucketNameParameter:
+    Type: AWS::SSM::Parameter
+    DependsOn:
+      - S3OriginBucket
+      - OriginResponseFunction
+    Properties:
+      Description: !Sub "${AWS::StackName} S3O origin bucket"
+      Type: String
+      Tier: Intelligent-Tiering
+      Name: !Sub "/edgelambda/${OriginResponseFunction}/S3OriginBucket"
+      Value: !Ref S3OriginBucket
+
+  LogLevelParameter:
+    Type: AWS::SSM::Parameter
+    DependsOn:
+      - S3OriginBucket
+      - OriginResponseFunction
+    Properties:
+      Description: !Sub "${AWS::StackName} Lambda log level"
+      Type: String
+      Tier: Intelligent-Tiering
+      Name: !Sub "/edgelambda/${OriginResponseFunction}/LogLevel"
+      Value: !Ref LogLevel
+
+  #
+  # Lambda@Edge Functions
+  #
+  LambdaEdgeFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - edgelambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/TranslateReadOnly
+      Policies:
+        - PolicyName: AllowReadWriteS3Origin
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub ${S3OriginBucket.Arn}/*
+
+  OriginResponseFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-OriginResponse
+      Timeout: 30
+      CodeUri: ./lambdas/origin_response/
+      Handler: main.lambda_handler
+      Role: !GetAtt LambdaEdgeFunctionRole.Arn
+
+Outputs:
+
+  Endpoint:
+    Description: Cloudfront endpoint url
+    Value: !Sub https://${Distribution.DomainName}

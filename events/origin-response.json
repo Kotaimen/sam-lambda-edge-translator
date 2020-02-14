@@ -1,0 +1,31 @@
+{
+  "Records": [
+      {
+          "cf": {
+              "request": {
+                  "clientIp": "127.0.0.1",
+                  "method": "GET",
+                  "uri": "/lang_zh/hello-world.txt",
+                  "headers": {
+                      "host": [
+                          {
+                              "key": "Host",
+                              "value": "d1234567890.cloudfront.net"
+                          }
+                      ],
+                      "user-agent": [
+                          {
+                              "key": "User-Agent",
+                              "value": "curl/7.18.1"
+                          }
+                      ]
+                  }
+              },
+              "response": {
+                  "status": "404",
+                  "statusDescription": "File not found"
+              }
+          }
+      }
+  ]
+}

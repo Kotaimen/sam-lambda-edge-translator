@@ -1,0 +1,18 @@
+-i https://pypi.org/simple
+-e ./src/translator
+boto3==1.11.17
+boto==2.49.0
+botocore==1.14.17
+certifi==2019.11.28
+chardet==3.0.4
+docutils==0.15.2
+future==0.18.2
+idna==2.8
+jmespath==0.9.4
+python-dateutil==2.8.1
+requests==2.22.0
+s3transfer==0.3.3
+six==1.14.0
+smart-open==1.9.0
+ssm-cache==2.9
+urllib3==1.25.8 ; python_version != '3.4'

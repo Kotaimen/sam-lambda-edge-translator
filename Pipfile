@@ -1,0 +1,17 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+pytest = "*"
+pylint = "*"
+
+[packages]
+boto3 = "*"
+smart_open = "*"
+ssm_cache = "*"
+translator = {editable = true,path = "./src/translator/"}
+
+[requires]
+python_version = "3.7"

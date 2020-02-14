@@ -1,0 +1,11 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "sam-lambda-edge-translator"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-n848ezx75te7"
+s3_prefix = "sam-lambda-edge-translator"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "LogLevel=\"DEBUG\""
+
